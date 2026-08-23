@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مدیریت سرمایه فیوچرز</title>
+<style>
+:root{font-family:Tahoma,Arial,sans-serif;color-scheme:dark}*{box-sizing:border-box}
+body{margin:0;background:#08111f;color:#edf3fc;min-height:100vh}.wrap{max-width:1050px;margin:auto;padding:20px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.muted{color:#91a0b5;font-size:13px}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card,.panel,.stat{background:#111d31;border:1px solid #293a53;border-radius:16px;padding:16px}
+.card h3{margin:0}.balance{font-size:29px;font-weight:800;margin:10px 0}.row{display:flex;justify-content:space-between;border-top:1px solid #293a53;padding:8px 0}
+.good{color:#4ade80}.warn{color:#fbbf24}.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0}.stat b{display:block;font-size:20px;margin-top:5px}
+.panel{margin-top:14px}.form{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}label{display:block;font-size:13px;color:#cbd5e1;margin-bottom:5px}
+input,select,textarea,button{width:100%;padding:11px;border-radius:10px;border:1px solid #3a4c66;background:#0b1424;color:white;font:inherit}textarea{min-height:80px}
+button{background:#2563eb;border-color:#2563eb;font-weight:bold;cursor:pointer}.secondary{background:#172238}.actions{display:flex;gap:10px;margin-top:12px}.actions button{width:auto;min-width:130px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:right;padding:9px;border-bottom:1px solid #293a53}.tablewrap{overflow:auto}
+.overlay{position:fixed;inset:0;background:#050a13f2;display:flex;align-items:center;justify-content:center;padding:20px;z-index:20}.login{width:min(390px,100%)}.hidden{display:none}.err{color:#fb7185;margin-top:8px}
+@media(max-width:760px){.cards,.stats,.form{grid-template-columns:1fr}.wrap{padding:12px}header{align-items:flex-start}.actions{flex-direction:column}.actions button{width:100%}}
+</style>
+</head>
+<body>
+<div id="login" class="overlay"><div class="panel login"><h2>ورود به مدیریت سرمایه</h2><p class="muted">رمز اختصاصی را وارد کن.</p><input id="password" type="password"><button style="margin-top:10px" onclick="doLogin()">ورود</button><div id="loginError" class="err"></div></div></div>
+<div class="wrap">
+<header><div><h2 style="margin:0">داشبورد سرمایه فیوچرز</h2><div class="muted">Bitunix · LBank · Toobit</div></div><button class="secondary" style="width:auto" onclick="logout()">خروج</button></header>
+<div id="accounts" class="cards"></div><div id="stats" class="stats"></div>
+<div class="panel"><h3>ثبت تغییر جدید</h3><div class="form">
+<div><label>تاریخ</label><input id="date" type="date"></div>
+<div><label>حساب</label><select id="account"><option>Bitunix</option><option>LBank</option><option>Toobit</option></select></div>
+<div><label>نوع عملیات</label><select id="type"><option value="withdrawal">برداشت سود</option><option value="balance_update">به‌روزرسانی موجودی</option><option value="deposit">واریز</option><option value="earn_transfer">انتقال به Earn</option></select></div>
+<div><label>مبلغ عملیات ($)</label><input id="amount" type="number" min="0" step=".01" value="0"></div>
+<div><label>موجودی حساب بعد از عملیات ($)</label><input id="balance" type="number" min="0" step=".01"></div>
+<div><label>توضیحات</label><textarea id="note"></textarea></div></div>
+<div class="actions"><button onclick="save()">ثبت اطلاعات</button><button class="secondary" onclick="clearForm()">پاک کردن</button></div></div>
+<div class="panel"><h3>آخرین تغییرات</h3><div class="tablewrap"><table><thead><tr><th>تاریخ</th><th>حساب</th><th>عملیات</th><th>مبلغ</th><th>موجودی بعد</th><th>توضیح</th></tr></thead><tbody id="history"></tbody></table></div></div>
+</div>
+<script>
+const API='https://jumowclgvkhakpwjjhfp.supabase.co/functions/v1/futures-tracker-api';
+let password=sessionStorage.getItem('futures_password')||'';
+const el=id=>document.getElementById(id);
+const labels={withdrawal:'برداشت سود',balance_update:'آپدیت موجودی',deposit:'واریز',earn_transfer:'انتقال به Earn'};
+el('date').value=new Date().toISOString().slice(0,10);
+const money=n=>'$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});
+async function api(action,data){const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','x-app-password':password},body:JSON.stringify({action,data})});const j=await r.json();if(!r.ok)throw new Error(j.error||'خطا');return j}
+async function doLogin(){password=el('password').value;try{await api('summary');sessionStorage.setItem('futures_password',password);el('login').classList.add('hidden');el('loginError').textContent='';await load()}catch{el('loginError').textContent='رمز ورود اشتباه است.'}}
+function logout(){sessionStorage.removeItem('futures_password');password='';el('password').value='';el('login').classList.remove('hidden')}
+async function load(){const d=await api('summary');el('accounts').innerHTML=d.accounts.map(a=>{const current=+a.current_balance,target=+a.target_balance;const status=current>target?'سود قابل برداشت دارد':current===target?'به هدف رسیده':'در حال رشد';return `<div class="card"><h3>${a.name}</h3><div class="balance">${money(current)}</div><div class="${status==='در حال رشد'?'warn':'good'}">${status}</div><div class="row"><span>هدف</span><b>${money(target)}</b></div><div class="row"><span>برداشت تاریخی</span><b>${money(a.total_withdrawn)}</b></div><div class="row"><span>سود قابل برداشت</span><b class="good">${money(a.withdrawable_profit)}</b></div></div>`}).join('');
+el('stats').innerHTML=`<div class="stat">کل فیوچرز<b>${money(d.totalCurrent)}</b></div><div class="stat">هدف کل<b>${money(d.totalTarget)}</b></div><div class="stat">برداشت تاریخی<b>${money(d.totalWithdrawn)}</b></div><div class="stat">انتقال Earn<b>${money(d.totalEarn)}</b></div><div class="stat">موجودی + برداشت<b>${money(d.totalWealth)}</b></div>`;
+el('history').innerHTML=d.events.map(e=>`<tr><td>${e.event_date}</td><td>${e.accounts?.name||''}</td><td>${labels[e.event_type]||e.event_type}</td><td>${money(e.amount)}</td><td>${e.balance_after==null?'—':money(e.balance_after)}</td><td>${e.note||''}</td></tr>`).join('')}
+function clearForm(){el('date').value=new Date().toISOString().slice(0,10);el('amount').value=0;el('balance').value='';el('note').value=''}
+async function save(){if(el('balance').value==='')return alert('موجودی بعد از عملیات را وارد کن.');const data={event_date:el('date').value,account_name:el('account').value,event_type:el('type').value,amount:Number(el('amount').value||0),balance_after:Number(el('balance').value),note:el('note').value.trim()};try{await api('add_event',data);clearForm();await load();alert('اطلاعات با موفقیت ثبت شد.')}catch(e){alert(e.message)}}
+if(password){api('summary').then(()=>{el('login').classList.add('hidden');load()}).catch(()=>logout())}
+</script></body></html>
