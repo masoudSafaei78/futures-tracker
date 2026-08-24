@@ -7,11 +7,12 @@
 <style>
 :root{font-family:Tahoma,Arial,sans-serif;color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#08111f;color:#edf3fc}.wrap{max-width:1180px;margin:auto;padding:18px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card,.panel,.stat{background:#111d31;border:1px solid #293a53;border-radius:15px;padding:15px}.big{font-size:26px;font-weight:800}.row{display:flex;justify-content:space-between;align-items:center;border-top:1px solid #293a53;padding:7px 0}.earn{color:#60a5fa}.spot{color:#c084fc}.good{color:#4ade80}.warn{color:#fbbf24}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:12px 0}.stat b{display:block;font-size:20px}.panel{margin-top:13px}.form,.targetgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}input,select,textarea,button{width:100%;padding:10px;border-radius:9px;border:1px solid #3a4c66;background:#0b1424;color:#fff;font:inherit}label{display:block;font-size:13px;color:#cbd5e1;margin:4px}textarea{min-height:76px}button{background:#2563eb;font-weight:bold;cursor:pointer}.hidden{display:none!important}.overlay{position:fixed;inset:0;background:#050a13f2;display:flex;align-items:center;justify-content:center;z-index:20}.login{width:min(390px,90%)}table{width:100%;border-collapse:collapse;font-size:12px}td,th{padding:8px;border-bottom:1px solid #293a53;text-align:right}.scroll{overflow:auto}.muted{color:#94a3b8;font-size:12px}.targetrow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.targetrow button{width:auto;min-width:90px}.sectiontitle{margin:0 0 5px}.summary3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.mini{padding:9px;border:1px solid #293a53;border-radius:10px;background:#0d1829;text-align:center}.mini b{display:block;font-size:18px;margin-top:3px}@media(max-width:760px){.cards,.stats,.form,.targetgrid,.summary3{grid-template-columns:1fr}.wrap{padding:10px}.targetrow{grid-template-columns:1fr}}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="login" class="overlay"><form class="panel login" onsubmit="doLogin(event)"><h2>ورود</h2><input id="password" type="password" placeholder="رمز ورود" autocomplete="current-password"><button type="submit" style="margin-top:8px">ورود</button><div id="err" class="warn"></div></form></div>
 <div class="wrap">
-<h2>مدیریت سرمایه Spot / Futures / Earn</h2>
+<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h2>مدیریت سرمایه Spot / Futures / Earn</h2><button onclick="exportExcel()" style="width:auto;min-width:130px">Export Excel</button></div>
 <div id="accounts" class="cards"></div>
 <div id="stats" class="stats"></div>
 <div class="panel"><h3 class="sectiontitle">تنظیم هدف Futures</h3><p class="muted">هدف هر صرافی را تغییر بده؛ مقدار قابل برداشت Futures و هدف کل خودکار محاسبه می‌شود.</p><div id="targets" class="targetgrid"></div></div>
@@ -44,6 +45,7 @@
 <script>
 const API='https://jumowclgvkhakpwjjhfp.supabase.co/functions/v1/futures-tracker-api';
 let password=sessionStorage.getItem('futures_password')||'';
+let lastData=null;
 const q=id=>document.getElementById(id);
 const money=n=>'$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});
 const labels={futures_to_earn:'Futures → Earn',spot_to_futures:'Spot → Futures',futures_to_spot:'Futures → Spot',spot_to_earn:'Spot → Earn',earn_to_spot:'Earn → Spot',spot_external_deposit:'Outside → Spot',earn_external_deposit:'Outside → Earn',earn_to_wallet:'Earn → Wallet',withdrawal:'Futures → Wallet',deposit:'Outside → Futures',balance_update:'آپدیت Futures',spot_balance_update:'آپدیت Spot',earn_balance_update:'آپدیت Earn'};
@@ -53,7 +55,55 @@ async function doLogin(e){if(e)e.preventDefault();password=q('password').value;t
 function syncFields(){const t=q('type').value;const f=['futures_to_earn','spot_to_futures','futures_to_spot','withdrawal','deposit','balance_update'].includes(t);const s=['spot_to_futures','futures_to_spot','spot_to_earn','earn_to_spot','spot_external_deposit','spot_balance_update'].includes(t);const e=['futures_to_earn','spot_to_earn','earn_to_spot','earn_external_deposit','earn_to_wallet','earn_balance_update'].includes(t);q('fbox').style.display=f?'block':'none';q('sbox').style.display=s?'block':'none';q('ebox').style.display=e?'block':'none'}
 async function updateTarget(name){const v=q('target_'+name).value;if(v===''||Number(v)<0)return alert('هدف معتبر وارد کن');try{await api('update_target',{account_name:name,target_balance:Number(v)});await load();alert('هدف '+name+' به '+money(v)+' تغییر کرد')}catch(e){alert(e.message)}}
 function flowTotal(events,name,type){return events.filter(e=>e.event_type===type&&e.accounts?.name===name).reduce((s,e)=>s+Number(e.amount||0),0)}
-async function load(){const d=await api('summary');q('accounts').innerHTML=d.accounts.map(a=>{const st=+a.current_balance>=+a.target_balance?'به هدف رسیده':'در حال رشد';const f2e=flowTotal(d.events,a.name,'futures_to_earn');const s2f=flowTotal(d.events,a.name,'spot_to_futures');const f2s=flowTotal(d.events,a.name,'futures_to_spot');const s2e=flowTotal(d.events,a.name,'spot_to_earn');const e2s=flowTotal(d.events,a.name,'earn_to_spot');const ext2s=flowTotal(d.events,a.name,'spot_external_deposit');return `<div class="card"><h3>${a.name}</h3><div class="summary3"><div class="mini">Spot<b class="spot">${money(a.spot_balance)}</b></div><div class="mini">Futures<b>${money(a.current_balance)}</b></div><div class="mini">Earn<b class="earn">${money(a.earn_balance)}</b></div></div><div class="row"><span>هدف Futures</span><b>${money(a.target_balance)}</b></div><div class="row"><span>قابل برداشت Futures</span><b class="good">${money(a.withdrawable_profit)}</b></div><div class="row"><span>Futures → Earn</span><b>${money(f2e)}</b></div><div class="row"><span>Spot → Futures</span><b>${money(s2f)}</b></div><div class="row"><span>Futures → Spot</span><b>${money(f2s)}</b></div><div class="row"><span>Spot → Earn</span><b>${money(s2e)}</b></div><div class="row"><span>Earn → Spot</span><b>${money(e2s)}</b></div><div class="row"><span>Outside → Spot</span><b>${money(ext2s)}</b></div><div class="row"><span>Futures → Wallet</span><b>${money(a.total_withdrawn)}</b></div><div class="row"><span>Earn → Wallet</span><b>${money(a.earn_withdrawn_to_wallet)}</b></div><div class="row"><span>Outside → Earn</span><b>${money(a.external_deposited_to_earn)}</b></div><div class="${st==='در حال رشد'?'warn':'good'}">${st}</div></div>`}).join('');q('targets').innerHTML=d.accounts.map(a=>`<div class="targetrow"><div><label>${a.name}</label><div class="muted">هدف فعلی: ${money(a.target_balance)}</div></div><input id="target_${a.name}" type="number" min="0" step="1" value="${Number(a.target_balance)}"><button onclick="updateTarget('${a.name}')">ذخیره هدف</button></div>`).join('');const totalF2E=d.events.filter(e=>e.event_type==='futures_to_earn').reduce((s,e)=>s+Number(e.amount||0),0);q('stats').innerHTML=`<div class="stat">کل Spot<b class="spot">${money(d.totalSpot)}</b></div><div class="stat">کل Futures<b>${money(d.totalCurrent)}</b></div><div class="stat">کل Earn<b class="earn">${money(d.totalEarn)}</b></div><div class="stat">دارایی فعلی صرافی‌ها<b>${money(Number(d.totalSpot)+Number(d.totalCurrent)+Number(d.totalEarn))}</b></div><div class="stat">هدف Futures<b>${money(d.totalTarget)}</b></div><div class="stat">کل Futures → Earn<b>${money(totalF2E)}</b></div><div class="stat">Futures → Wallet<b>${money(d.totalWithdrawn)}</b></div><div class="stat">Earn → Wallet<b>${money(d.totalEarnToWallet)}</b></div>`;q('history').innerHTML=d.events.map(e=>`<tr><td>${e.event_date}</td><td>${e.accounts?.name||''}</td><td>${labels[e.event_type]||e.event_type}<div class="muted">${e.source_type||''} → ${e.destination_type||''}</div></td><td>${money(e.amount)}</td><td>${e.spot_balance_after==null?'—':money(e.spot_balance_after)}</td><td>${e.balance_after==null?'—':money(e.balance_after)}</td><td>${e.earn_balance_after==null?'—':money(e.earn_balance_after)}</td><td>${e.note||''}</td></tr>`).join('')}
+async function load(){const d=await api('summary');lastData=d;q('accounts').innerHTML=d.accounts.map(a=>{const st=+a.current_balance>=+a.target_balance?'به هدف رسیده':'در حال رشد';const f2e=flowTotal(d.events,a.name,'futures_to_earn');const s2f=flowTotal(d.events,a.name,'spot_to_futures');const f2s=flowTotal(d.events,a.name,'futures_to_spot');const s2e=flowTotal(d.events,a.name,'spot_to_earn');const e2s=flowTotal(d.events,a.name,'earn_to_spot');const ext2s=flowTotal(d.events,a.name,'spot_external_deposit');return `<div class="card"><h3>${a.name}</h3><div class="summary3"><div class="mini">Spot<b class="spot">${money(a.spot_balance)}</b></div><div class="mini">Futures<b>${money(a.current_balance)}</b></div><div class="mini">Earn<b class="earn">${money(a.earn_balance)}</b></div></div><div class="row"><span>هدف Futures</span><b>${money(a.target_balance)}</b></div><div class="row"><span>قابل برداشت Futures</span><b class="good">${money(a.withdrawable_profit)}</b></div><div class="row"><span>Futures → Earn</span><b>${money(f2e)}</b></div><div class="row"><span>Spot → Futures</span><b>${money(s2f)}</b></div><div class="row"><span>Futures → Spot</span><b>${money(f2s)}</b></div><div class="row"><span>Spot → Earn</span><b>${money(s2e)}</b></div><div class="row"><span>Earn → Spot</span><b>${money(e2s)}</b></div><div class="row"><span>Outside → Spot</span><b>${money(ext2s)}</b></div><div class="row"><span>Futures → Wallet</span><b>${money(a.total_withdrawn)}</b></div><div class="row"><span>Earn → Wallet</span><b>${money(a.earn_withdrawn_to_wallet)}</b></div><div class="row"><span>Outside → Earn</span><b>${money(a.external_deposited_to_earn)}</b></div><div class="${st==='در حال رشد'?'warn':'good'}">${st}</div></div>`}).join('');q('targets').innerHTML=d.accounts.map(a=>`<div class="targetrow"><div><label>${a.name}</label><div class="muted">هدف فعلی: ${money(a.target_balance)}</div></div><input id="target_${a.name}" type="number" min="0" step="1" value="${Number(a.target_balance)}"><button onclick="updateTarget('${a.name}')">ذخیره هدف</button></div>`).join('');const totalF2E=d.events.filter(e=>e.event_type==='futures_to_earn').reduce((s,e)=>s+Number(e.amount||0),0);q('stats').innerHTML=`<div class="stat">کل Spot<b class="spot">${money(d.totalSpot)}</b></div><div class="stat">کل Futures<b>${money(d.totalCurrent)}</b></div><div class="stat">کل Earn<b class="earn">${money(d.totalEarn)}</b></div><div class="stat">دارایی فعلی صرافی‌ها<b>${money(Number(d.totalSpot)+Number(d.totalCurrent)+Number(d.totalEarn))}</b></div><div class="stat">هدف Futures<b>${money(d.totalTarget)}</b></div><div class="stat">کل Futures → Earn<b>${money(totalF2E)}</b></div><div class="stat">Futures → Wallet<b>${money(d.totalWithdrawn)}</b></div><div class="stat">Earn → Wallet<b>${money(d.totalEarnToWallet)}</b></div>`;q('history').innerHTML=d.events.map(e=>`<tr><td>${e.event_date}</td><td>${e.accounts?.name||''}</td><td>${labels[e.event_type]||e.event_type}<div class="muted">${e.source_type||''} → ${e.destination_type||''}</div></td><td>${money(e.amount)}</td><td>${e.spot_balance_after==null?'—':money(e.spot_balance_after)}</td><td>${e.balance_after==null?'—':money(e.balance_after)}</td><td>${e.earn_balance_after==null?'—':money(e.earn_balance_after)}</td><td>${e.note||''}</td></tr>`).join('')}
+async function exportExcel(){
+  try{
+    const d=lastData||await api('summary');
+    if(typeof XLSX==='undefined') throw Error('Excel library loaded نشد');
+    const wb=XLSX.utils.book_new();
+
+    const summaryRows=[
+      {Item:'Total Spot',Amount:Number(d.totalSpot||0)},
+      {Item:'Total Futures',Amount:Number(d.totalCurrent||0)},
+      {Item:'Total Earn',Amount:Number(d.totalEarn||0)},
+      {Item:'Total Exchange Assets',Amount:Number(d.totalSpot||0)+Number(d.totalCurrent||0)+Number(d.totalEarn||0)},
+      {Item:'Futures Target',Amount:Number(d.totalTarget||0)},
+      {Item:'Futures → Wallet',Amount:Number(d.totalWithdrawn||0)},
+      {Item:'Earn → Wallet',Amount:Number(d.totalEarnToWallet||0)}
+    ];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(summaryRows),'Summary');
+
+    const accountsRows=(d.accounts||[]).map(a=>({
+      Exchange:a.name,
+      Spot:Number(a.spot_balance||0),
+      Futures:Number(a.current_balance||0),
+      Earn:Number(a.earn_balance||0),
+      'Futures Target':Number(a.target_balance||0),
+      'Withdrawable Futures':Number(a.withdrawable_profit||0),
+      'Futures → Wallet':Number(a.total_withdrawn||0),
+      'Earn → Wallet':Number(a.earn_withdrawn_to_wallet||0),
+      'Outside → Earn':Number(a.external_deposited_to_earn||0)
+    }));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(accountsRows),'Accounts');
+
+    const txRows=(d.events||[]).map(e=>({
+      Date:e.event_date,
+      Exchange:e.accounts?.name||'',
+      Flow:labels[e.event_type]||e.event_type,
+      Source:e.source_type||'',
+      Destination:e.destination_type||'',
+      Amount:Number(e.amount||0),
+      'Spot After':e.spot_balance_after==null?'':Number(e.spot_balance_after),
+      'Futures After':e.balance_after==null?'':Number(e.balance_after),
+      'Earn After':e.earn_balance_after==null?'':Number(e.earn_balance_after),
+      Note:e.note||''
+    }));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(txRows),'Transactions');
+
+    const ds=new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb,'futures-tracker-'+ds+'.xlsx');
+  }catch(e){alert(e.message||'خطا در ساخت فایل Excel')}
+}
 async function save(){const data={event_date:q('date').value,account_name:q('account').value,event_type:q('type').value,amount:Number(q('amount').value||0),balance_after:q('balance').value===''?null:Number(q('balance').value),spot_balance_after:q('spotBalance').value===''?null:Number(q('spotBalance').value),earn_balance_after:q('earnBalance').value===''?null:Number(q('earnBalance').value),note:q('note').value.trim()};try{await api('add_event',data);q('amount').value=0;q('balance').value='';q('spotBalance').value='';q('earnBalance').value='';q('note').value='';await load();alert('ثبت شد')}catch(e){alert(e.message)}}
 syncFields();if(password){api('summary').then(()=>{q('login').classList.add('hidden');load()}).catch(()=>sessionStorage.clear())}
 </script>
