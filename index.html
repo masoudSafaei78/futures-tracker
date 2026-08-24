@@ -107,5 +107,6 @@ async function exportExcel(){
 async function save(){const data={event_date:q('date').value,account_name:q('account').value,event_type:q('type').value,amount:Number(q('amount').value||0),balance_after:q('balance').value===''?null:Number(q('balance').value),spot_balance_after:q('spotBalance').value===''?null:Number(q('spotBalance').value),earn_balance_after:q('earnBalance').value===''?null:Number(q('earnBalance').value),note:q('note').value.trim()};try{await api('add_event',data);q('amount').value=0;q('balance').value='';q('spotBalance').value='';q('earnBalance').value='';q('note').value='';await load();alert('ثبت شد')}catch(e){alert(e.message)}}
 syncFields();if(password){api('summary').then(()=>{q('login').classList.add('hidden');load()}).catch(()=>sessionStorage.clear())}
 </script>
+<!-- deploy-trigger: 2026-08-24T15:17+03:30 -->
 </body>
 </html>
