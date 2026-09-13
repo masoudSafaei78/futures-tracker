@@ -1,9 +1,9 @@
 {
-  "name": "bitunix-pro-panel",
-  "version": "2.0.0",
+  "name": "bitunix-pro-panel-v2",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/fundingRisk.test.mjs"
+    "test": "node --test",
+    "build": "node --check api/scan.js && node --check api/detail.js && node --check api/kline.js && node --check api/symbols.js && node --check lib/fundingRisk.mjs"
   }
 }
