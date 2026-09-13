@@ -1,0 +1,9 @@
+{
+  "name": "bitunix-pro-panel",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/fundingRisk.test.mjs"
+  }
+}
